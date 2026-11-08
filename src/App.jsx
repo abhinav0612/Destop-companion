@@ -5,22 +5,22 @@ const ipcRenderer = electron ? electron.ipcRenderer : null;
 
 function App() {
   const [messages, setMessages] = useState([
-    { sender: 'bot', text: "Hey Abhinav! I'm online." }
+    { sender: 'bot', text: "Hey Abhinav! Ready when you are." }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSend = async (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
-    const userText = input;
-    setMessages((prev) => [...prev, { sender: 'user', text: userText }]);
+    const text = input;
+    setMessages((prev) => [...prev, { sender: 'user', text }]);
     setInput("");
     setLoading(true);
 
     if (ipcRenderer) {
-      const botReply = await ipcRenderer.invoke('ask-companion', userText);
+      const botReply = await ipcRenderer.invoke('ask-companion', text);
       setMessages((prev) => [...prev, { sender: 'bot', text: botReply }]);
     } else {
       setMessages((prev) => [...prev, { sender: 'bot', text: "Browser test mode." }]);
@@ -49,14 +49,15 @@ function App() {
           {loading && <div style={{...styles.bubble, background: '#374151'}}>Thinking...</div>}
         </div>
 
-        <form onSubmit={handleSend} style={styles.form}>
+        <form onSubmit={handleSendMessage} style={styles.form}>
           <input 
             type="text" 
             value={input} 
             onChange={(e) => setInput(e.target.value)} 
-            placeholder="Type a message..." 
+            placeholder="Ask your companion..." 
             style={styles.input}
           />
+          <button type="submit" style={styles.sendBtn}>➤</button>
         </form>
       </div>
     </div>
@@ -67,7 +68,7 @@ const styles = {
   container: {
     width: '100vw',
     height: '100vh',
-    background: '#1e1e2e', // Solid color for now so it's clearly visible
+    background: '#1e1e2e',
     color: '#fff',
     fontFamily: 'sans-serif',
     display: 'flex',
@@ -119,15 +120,24 @@ const styles = {
   },
   form: {
     display: 'flex',
+    gap: '6px',
   },
   input: {
-    width: '100%',
+    flex: 1,
     padding: '8px 12px',
     borderRadius: '8px',
     border: '1px solid #4b5563',
     background: '#11111b',
     color: '#fff',
     outline: 'none',
+  },
+  sendBtn: {
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: 'none',
+    background: '#4f46e5',
+    color: '#fff',
+    cursor: 'pointer',
   }
 };
 
