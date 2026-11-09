@@ -1,16 +1,70 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 
 const electron = window.require ? window.require('electron') : null;
 const ipcRenderer = electron ? electron.ipcRenderer : null;
 
 function App() {
   const [messages, setMessages] = useState([
-    { sender: 'bot', text: "Hey Abhinav! Ready when you are." }
+    { sender: 'bot', text: "Hey Abhinav! Click the mic to record or type below." }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
-  const handleSendMessage = async (e) => {
+  const toggleRecording = async () => {
+    if (isRecording) {
+      // Stop recording
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+      setIsRecording(false);
+    } else {
+      // Start recording
+      audioChunksRef.current = [];
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.readAsDataURL(audioBlob);
+          reader.onloadend = async () => {
+            const base64Audio = reader.result;
+            setLoading(true);
+            setMessages((prev) => [...prev, { sender: 'user', text: "🎤 [Voice Command Sent]" }]);
+
+            if (ipcRenderer) {
+              const botReply = await ipcRenderer.invoke('process-audio', base64Audio);
+              setMessages((prev) => [...prev, { sender: 'bot', text: botReply }]);
+            } else {
+              setMessages((prev) => [...prev, { sender: 'bot', text: "Browser test mode." }]);
+            }
+            setLoading(false);
+          };
+        };
+
+        mediaRecorderRef.current = mediaRecorder;
+        mediaRecorder.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error("Microphone access error:", err);
+        alert("Could not access microphone.");
+      }
+    }
+  };
+
+  const handleTextSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
@@ -47,16 +101,25 @@ function App() {
             </div>
           ))}
           {loading && <div style={{...styles.bubble, background: '#374151'}}>Thinking...</div>}
+          {isRecording && <div style={{...styles.bubble, background: '#dc2626'}}>Recording... Click mic again to send 🎙️</div>}
         </div>
 
-        <form onSubmit={handleSendMessage} style={styles.form}>
+        <form onSubmit={handleTextSubmit} style={styles.form}>
           <input 
             type="text" 
             value={input} 
             onChange={(e) => setInput(e.target.value)} 
-            placeholder="Ask your companion..." 
+            placeholder="Type or click mic..." 
             style={styles.input}
           />
+          <button 
+            type="button" 
+            onClick={toggleRecording}
+            style={{ ...styles.micBtn, background: isRecording ? '#ef4444' : '#374151' }}
+            title="Click to record/stop"
+          >
+            🎙️
+          </button>
           <button type="submit" style={styles.sendBtn}>➤</button>
         </form>
       </div>
@@ -130,6 +193,13 @@ const styles = {
     background: '#11111b',
     color: '#fff',
     outline: 'none',
+  },
+  micBtn: {
+    padding: '8px 12px',
+    borderRadius: '8px',
+    border: '1px solid #4b5563',
+    cursor: 'pointer',
+    fontSize: '14px',
   },
   sendBtn: {
     padding: '8px 12px',
